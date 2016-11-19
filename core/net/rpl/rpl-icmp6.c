@@ -57,7 +57,38 @@
 #include <limits.h>
 #include <string.h>
 
-#define DEBUG DEBUG_NONE
+ /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.2
+
+	modified line:  following 2 line
+**************************************************************************/
+
+
+
+//#define DEBUG DEBUG_NONE
+//#define DEBUG DEBUG_FULL
+#define DEBUG DEBUG_PRINT
+//#define DEBUG DEBUG_ANNOTATE
+
+ /*************************************************************************
+
+	modified date:		2016/10/10
+
+	version:			v1.1.2
+	
+	modified line:		following 1 line
+
+	before:				none
+
+	after:				#define RPL_CONF_DAO_ACK 1
+**************************************************************************/
+
+
+#define RPL_CONF_DAO_ACK 1
+
 
 #include "net/ip/uip-debug.h"
 
@@ -86,6 +117,23 @@ void RPL_DEBUG_DAO_OUTPUT(rpl_parent_t *);
 #endif
 
 static uint8_t dao_sequence = RPL_LOLLIPOP_INIT;
+
+/*************************************************************************
+
+	modified date:	2016/10/10
+
+	version:	v1.1.0
+
+	modified line:  following 8 line
+**************************************************************************/
+static uint8_t dis_received_num=0;
+static uint8_t dio_received_num=0;
+static uint8_t dao_received_num=0;
+static uint8_t dao_ack_received_num=0;
+static uint8_t dis_sended_num=0;
+static uint8_t dio_sended_num=0;
+static uint8_t dao_sended_num=0;
+static uint8_t dao_ack_sended_num=0;
 
 extern rpl_of_t RPL_OF;
 
@@ -176,6 +224,17 @@ dis_input(void)
     }
   }
   uip_len = 0;
+
+/*************************************************************************
+
+	modified date:	2016/10/10
+
+	version:	v1.1.0
+
+	modified line:  following 2 line
+**************************************************************************/
+  dis_received_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -206,6 +265,16 @@ dis_output(uip_ipaddr_t *addr)
   PRINTF("\n");
 
   uip_icmp6_send(addr, ICMP6_RPL, RPL_CODE_DIS, 2);
+  /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dis_sended_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -419,6 +488,16 @@ dio_input(void)
   rpl_process_dio(&from, &dio);
 
   uip_len = 0;
+  /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dio_received_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -546,6 +625,16 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
     PRINTF("RPL: No prefix to announce (len %d)\n",
            dag->prefix_info.length);
   }
+  /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dio_sended_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 
 #if RPL_LEAF_ONLY
 #if (DEBUG) & DEBUG_PRINT
@@ -573,6 +662,7 @@ dio_output(rpl_instance_t *instance, uip_ipaddr_t *uc_addr)
     uip_icmp6_send(uc_addr, ICMP6_RPL, RPL_CODE_DIO, pos);
   }
 #endif /* RPL_LEAF_ONLY */
+
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -696,11 +786,31 @@ dao_input(void)
       break;
     }
   }
+ /*************************************************************************
 
-  PRINTF("RPL: DAO lifetime: %u, prefix length: %u prefix: ",
+	modified date:	2016/10/10
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+
+	before code:
+
+		PRINTF("RPL: DAO lifetime: %u, prefix length: %u prefix: ",
           (unsigned)lifetime, (unsigned)prefixlen);
-  PRINT6ADDR(&prefix);
-  PRINTF("\n");
+		PRINT6ADDR(&prefix);
+
+	modified code:
+		 PRINTF("RPL: DAO flag: %u, option type: %u, lifetime: %u, prefix length: %u prefix: ",
+          (unsigned)flags,(unsigned)subopt_type,(unsigned)lifetime, (unsigned)prefixlen);
+		 PRINT6ADDR(&prefix);
+
+**************************************************************************/
+
+ PRINTF("RPL: DAO flag: %u, option type: %u, lifetime: %u, prefix length: %u prefix: ",
+          (unsigned)flags,(unsigned)subopt_type,(unsigned)lifetime, (unsigned)prefixlen);
+ PRINT6ADDR(&prefix);
+ PRINTF("\n");
 
 #if RPL_CONF_MULTICAST
   if(uip_is_addr_mcast_global(&prefix)) {
@@ -802,6 +912,16 @@ fwd_dao:
     }
   }
   uip_len = 0;
+  /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dao_received_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -817,6 +937,21 @@ dao_output(rpl_parent_t *parent, uint8_t lifetime)
 
   /* Sending a DAO with own prefix as target */
   dao_output_target(parent, &prefix, lifetime);
+
+  /*************************************************************************
+
+	modified date:		2016/10/10
+
+	version:			v1.1.2
+
+	modified line:		following 2 line
+
+	before:				dao_sended_num++;
+						PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
+
+	now:				(deleted)
+**************************************************************************/
+  
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -907,6 +1042,17 @@ dao_output_target(rpl_parent_t *parent, uip_ipaddr_t *prefix, uint8_t lifetime)
   if(rpl_get_parent_ipaddr(parent) != NULL) {
     uip_icmp6_send(rpl_get_parent_ipaddr(parent), ICMP6_RPL, RPL_CODE_DAO, pos);
   }
+  
+  /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dao_sended_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -930,6 +1076,17 @@ dao_ack_input(void)
     sequence, status);
   PRINT6ADDR(&UIP_IP_BUF->srcipaddr);
   PRINTF("\n");
+    /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dao_ack_received_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
+
 #endif /* DEBUG */
   uip_len = 0;
 }
@@ -951,6 +1108,18 @@ dao_ack_output(rpl_instance_t *instance, uip_ipaddr_t *dest, uint8_t sequence)
   buffer[3] = 0;
 
   uip_icmp6_send(dest, ICMP6_RPL, RPL_CODE_DAO_ACK, 4);
+
+ /*************************************************************************
+
+	modified date:	2016/10/9
+
+	version:	v1.0.1
+
+	modified line:  following 2 line
+**************************************************************************/
+  dao_ack_sended_num++;
+  PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
+
 }
 /*---------------------------------------------------------------------------*/
 void
