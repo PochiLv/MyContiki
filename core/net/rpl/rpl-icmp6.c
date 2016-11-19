@@ -906,6 +906,20 @@ fwd_dao:
       PRINTF("\n");
       uip_icmp6_send(rpl_get_parent_ipaddr(dag->preferred_parent),
                      ICMP6_RPL, RPL_CODE_DAO, buffer_length);
+      /*********************************************************
+
+	modified date:	2016/11/19
+
+	version:	v2.0.1
+
+	modified line:  following 2 line
+
+        result: patch the forwarding dao num
+
+
+      ***********************************************************/
+       dao_sended_num++;
+       PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d        \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
     }
     if(flags & RPL_DAO_K_FLAG) {
       dao_ack_output(instance, &dao_sender_addr, sequence);
