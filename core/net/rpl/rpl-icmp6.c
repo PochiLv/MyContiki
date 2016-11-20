@@ -120,20 +120,22 @@ static uint8_t dao_sequence = RPL_LOLLIPOP_INIT;
 
 /*************************************************************************
 
-	modified date:	2016/10/10
+	modified date:	2016/11/20
 
-	version:	v1.1.0
+	version:	v2.1.1 
 
 	modified line:  following 8 line
+
+	description:	patch a bug of msg num can not up to 255
 **************************************************************************/
-static uint8_t dis_received_num=0;
-static uint8_t dio_received_num=0;
-static uint8_t dao_received_num=0;
-static uint8_t dao_ack_received_num=0;
-static uint8_t dis_sended_num=0;
-static uint8_t dio_sended_num=0;
-static uint8_t dao_sended_num=0;
-static uint8_t dao_ack_sended_num=0;
+static uint16_t dis_received_num=0;
+static uint16_t dio_received_num=0;
+static uint16_t dao_received_num=0;
+static uint16_t dao_ack_received_num=0;
+static uint16_t dis_sended_num=0;
+static uint16_t dio_sended_num=0;
+static uint16_t dao_sended_num=0;
+static uint16_t dao_ack_sended_num=0;
 
 extern rpl_of_t RPL_OF;
 
