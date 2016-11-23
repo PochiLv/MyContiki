@@ -1,3 +1,10 @@
+/******************************************************************
+
+		我才不管这个是什么，反正我就是邋邋ICMP6最熟，所以
+		我从这个文件开始注释，这个文件，其实是非常重要的
+		控制消息的发送，几乎都是依靠这个文件完成的。
+
+*******************************************************************/
 /*
  * Copyright (c) 2010, Swedish Institute of Computer Science.
  * All rights reserved.
@@ -45,6 +52,12 @@
  * @{
  */
 
+/********************************************************
+
+			前面这个部分就是引入头文件
+
+*********************************************************/
+
 #include "net/ip/tcpip.h"
 #include "net/ip/uip.h"
 #include "net/ipv6/uip-ds6.h"
@@ -58,6 +71,16 @@
 #include <string.h>
 
  /*************************************************************************
+	这个部分是我添加的，用来打印debug信息的，因为有些下面打印的信息和
+	DEBUG定义成什么是有关系的。
+
+	下面这部分内容定义在uip-debug.h
+	
+    DEBUG_NONE      0
+	DEBUG_PRINT     1
+	DEBUG_ANNOTATE  2
+	DEBUG_FULL      DEBUG_ANNOTATE | DEBUG_PRINT
+
 
 	modified date:	2016/10/9
 
@@ -74,6 +97,9 @@
 //#define DEBUG DEBUG_ANNOTATE
 
  /*************************************************************************
+	当这个东西RPL_CONF_DAO_ACK设置成1的时候，才有ACK，
+	不然CONTIKI默认不发
+
 
 	modified date:		2016/10/10
 
@@ -93,11 +119,22 @@
 #include "net/ip/uip-debug.h"
 
 /*---------------------------------------------------------------------------*/
+
+/*****************************************************************************
+
+		这里面定义的是一些用以判断GROUND 或者MOP的一些常量
+
+*****************************************************************************/
 #define RPL_DIO_GROUNDED                 0x80
 #define RPL_DIO_MOP_SHIFT                3
 #define RPL_DIO_MOP_MASK                 0x38
 #define RPL_DIO_PREFERENCE_MASK          0x07
 
+/****************************************************************************
+
+		这部分和UIP有关系，很多相关的信息，其实是从UIP那里拿到的
+
+*****************************************************************************/
 #define UIP_IP_BUF       ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
 #define UIP_ICMP_BUF     ((struct uip_icmp_hdr *)&uip_buf[uip_l2_l3_hdr_len])
 #define UIP_ICMP_PAYLOAD ((unsigned char *)&uip_buf[uip_l2_l3_icmp_hdr_len])
@@ -108,6 +145,7 @@ static void dao_input(void);
 static void dao_ack_input(void);
 
 /* some debug callbacks useful when debugging RPL networks */
+/* 看起来这个部分是用来做DIO DAO debug用的，但是我一次都没用过 */
 #ifdef RPL_DEBUG_DIO_INPUT
 void RPL_DEBUG_DIO_INPUT(uip_ipaddr_t *, rpl_dio_t *);
 #endif
@@ -116,9 +154,19 @@ void RPL_DEBUG_DIO_INPUT(uip_ipaddr_t *, rpl_dio_t *);
 void RPL_DEBUG_DAO_OUTPUT(rpl_parent_t *);
 #endif
 
+/*************************************************************************
+
+	因为查找RFC6550显示，rpl的counter被细分为lollipop，所以这个东西，
+	应该就是用来用做测试序列的。
+
+**************************************************************************/
 static uint8_t dao_sequence = RPL_LOLLIPOP_INIT;
 
 /*************************************************************************
+	这一系列定义的东西，我用来计算各种种类的控制消息数目的。
+	至于为什么用uint16_t，因为我一开始用的uint8_t结果最大只能计数到255，
+	差评，最后改成这个的。
+
 
 	modified date:	2016/11/20
 
@@ -137,18 +185,28 @@ static uint16_t dio_sended_num=0;
 static uint16_t dao_sended_num=0;
 static uint16_t dao_ack_sended_num=0;
 
+/* 这个应该是RPL目标函数的变量 */
 extern rpl_of_t RPL_OF;
 
+/* 如果有配置这个RPL_CONF_MULTICAST则定义一个变量，就是下面这个变量 */
 #if RPL_CONF_MULTICAST
 static uip_mcast6_route_t *mcast_group;
 #endif
 /*---------------------------------------------------------------------------*/
 /* Initialise RPL ICMPv6 message handlers */
+/* 初始化ICMP6的消息处理器 */
 UIP_ICMP6_HANDLER(dis_handler, ICMP6_RPL, RPL_CODE_DIS, dis_input);
 UIP_ICMP6_HANDLER(dio_handler, ICMP6_RPL, RPL_CODE_DIO, dio_input);
 UIP_ICMP6_HANDLER(dao_handler, ICMP6_RPL, RPL_CODE_DAO, dao_input);
 UIP_ICMP6_HANDLER(dao_ack_handler, ICMP6_RPL, RPL_CODE_DAO_ACK, dao_ack_input);
 /*---------------------------------------------------------------------------*/
+
+/********************************************************
+
+	通过底层的uip地址得到全局global地址放在addr里面
+	如果获得了global_addr那么，就返回1，不然就返回0
+
+*********************************************************/
 static int
 get_global_addr(uip_ipaddr_t *addr)
 {
@@ -167,6 +225,11 @@ get_global_addr(uip_ipaddr_t *addr)
   }
   return 0;
 }
+/******************************************************************************
+
+		这部分我看不懂，什么又get16，又get32的，而且又没有注释
+
+*******************************************************************************/
 /*---------------------------------------------------------------------------*/
 static uint32_t
 get32(uint8_t *buffer, int pos)
@@ -197,37 +260,52 @@ set16(uint8_t *buffer, int pos, uint16_t value)
   buffer[pos++] = value & 0xff;
 }
 /*---------------------------------------------------------------------------*/
+/* 接收dis消息 */
 static void
 dis_input(void)
 {
+  //局部变量定义了instance和end,都是rpl_instance类型的
   rpl_instance_t *instance;
   rpl_instance_t *end;
 
   /* DAG Information Solicitation */
+  /* 这个就是DIS的全称 */
   PRINTF("RPL: Received a DIS from ");
   PRINT6ADDR(&UIP_IP_BUF->srcipaddr);
   PRINTF("\n");
 
+  //遍历instance列表，但是其实我们一般只有一个instance就对了
   for(instance = &instance_table[0], end = instance + RPL_MAX_INSTANCES;
       instance < end; ++instance) {
-    if(instance->used == 1) {
+	//遍历到的这个instance还是要有人用的，没有人用就没意义了。
+	if(instance->used == 1) {
+//如果是叶子节点
 #if RPL_LEAF_ONLY
+	  //如果接收的DIS是单播，那么
       if(!uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
-	PRINTF("RPL: LEAF ONLY Multicast DIS will NOT reset DIO timer\n");
+	  //打印，DIS只有多播才会reset DIO 定时器
+	    PRINTF("RPL: LEAF ONLY Multicast DIS will NOT reset DIO timer\n");
+ //如果不是叶子节点
 #else /* !RPL_LEAF_ONLY */
-      if(uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
-        PRINTF("RPL: Multicast DIS => reset DIO timer\n");
-        rpl_reset_dio_timer(instance);
+	  //如果接收到的DIS是多播
+	  if(uip_is_addr_mcast(&UIP_IP_BUF->destipaddr)) {
+		//打印"接收多播DIS,reset DIO 定时器"
+		PRINTF("RPL: Multicast DIS => reset DIO timer\n");
+		//同时reset DIO定时器
+		rpl_reset_dio_timer(instance);
       } else {
 #endif /* !RPL_LEAF_ONLY */
+		//打印"RPL: 单播DIS，回复"单播DIS，回复sender
         PRINTF("RPL: Unicast DIS, reply to sender\n");
         dio_output(instance, &UIP_IP_BUF->srcipaddr);
       }
     }
   }
+  //设置uip长度为0
   uip_len = 0;
 
 /*************************************************************************
+	增加dis_r的数量，并且打印出各控制消息的数量
 
 	modified date:	2016/10/10
 
@@ -239,10 +317,13 @@ dis_input(void)
   PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
+/* 发送dis的函数 */
 void
 dis_output(uip_ipaddr_t *addr)
 {
+  //定义字符数组
   unsigned char *buffer;
+  //定义uip地址
   uip_ipaddr_t tmpaddr;
 
   /*
@@ -254,20 +335,26 @@ dis_output(uip_ipaddr_t *addr)
    *     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
    */
 
+  // uip_icmp负载赋到buffer上
   buffer = UIP_ICMP_PAYLOAD;
   buffer[0] = buffer[1] = 0;
 
+  //如果dis的目标地址为空
   if(addr == NULL) {
+  	//tmpaddr的意思应该就是tempaddr，暂存addr，把本地多播地址放在tmpaddr里
     uip_create_linklocal_rplnodes_mcast(&tmpaddr);
+	//再把tmpaddr附于addr
     addr = &tmpaddr;
   }
 
+  //打印"发送DIS给xxx(地址)"
   PRINTF("RPL: Sending a DIS to ");
   PRINT6ADDR(addr);
   PRINTF("\n");
-
+  //发送icmp消息，类型RPL，dis控制消息,负载消息长度2
   uip_icmp6_send(addr, ICMP6_RPL, RPL_CODE_DIS, 2);
   /*************************************************************************
+    发送dis数量++
 
 	modified date:	2016/10/9
 
@@ -279,49 +366,71 @@ dis_output(uip_ipaddr_t *addr)
   PRINTF("dis_s:%d dis_r:%d dio_s:%d dio_r:%d dao_s:%d dao_r:%d dao_a_s:%d dao_a_r:%d \n",dis_sended_num,dis_received_num,dio_sended_num,dio_received_num,dao_sended_num,dao_received_num,dao_ack_sended_num,dao_ack_received_num);
 }
 /*---------------------------------------------------------------------------*/
+/* 接收dio消息 */
 static void
 dio_input(void)
 {
+  //定义buffer
   unsigned char *buffer;
+  //定义buffer长度
   uint8_t buffer_length;
+  //定义dio
   rpl_dio_t dio;
+  //定义option的类型
   uint8_t subopt_type;
   int i;
   int len;
+  //定义dio消息从哪里发过来的
   uip_ipaddr_t from;
   uip_ds6_nbr_t *nbr;
-
+  //将dio那部分内存空间清空，用0去代替
   memset(&dio, 0, sizeof(dio));
 
   /* Set default values in case the DIO configuration option is missing. */
+  /* 设置默认值，以防DIO option丢失 */
+  //设置dag的间隔
   dio.dag_intdoubl = RPL_DIO_INTERVAL_DOUBLINGS;
+  //设置dio最小间隔
   dio.dag_intmin = RPL_DIO_INTERVAL_MIN;
+  //设置dio的冗余，默认值是10
   dio.dag_redund = RPL_DIO_REDUNDANCY;
+  //rpl最小增长跳数
   dio.dag_min_hoprankinc = RPL_MIN_HOPRANKINC;
+  //rpl最大增长跳数
   dio.dag_max_rankinc = RPL_MAX_RANKINC;
+  //ocp的全称是object code point意思是选哪一个of
+  //如果定义成0，调用的就是OF0目标函数
+  //如果定义成1，调用的就是MRHOF目标函数
+  //默认是mrhof
   dio.ocp = RPL_OF.ocp;
+  //设置dio默认生存时间，默认0xff
   dio.default_lifetime = RPL_DEFAULT_LIFETIME;
+  //设置dio的生存时间模块，默认为0xffff
   dio.lifetime_unit = RPL_DEFAULT_LIFETIME_UNIT;
-
+  //将发送者的地址赋给from
   uip_ipaddr_copy(&from, &UIP_IP_BUF->srcipaddr);
 
   /* DAG Information Object */
   PRINTF("RPL: Received a DIO from ");
   PRINT6ADDR(&from);
   PRINTF("\n");
-
+  //如果在本节点的邻居列表中找不到发送节点的地址
   if((nbr = uip_ds6_nbr_lookup(&from)) == NULL) {
+  	//如果存储邻居节点地址的列表没有满
     if((nbr = uip_ds6_nbr_add(&from, (uip_lladdr_t *)
                               packetbuf_addr(PACKETBUF_ADDR_SENDER),
                               0, NBR_REACHABLE)) != NULL) {
       /* set reachable timer */
-      stimer_set(&nbr->reachable, UIP_ND6_REACHABLE_TIME / 1000);
+	  //设置邻居节点可达计时器
+	  stimer_set(&nbr->reachable, UIP_ND6_REACHABLE_TIME / 1000);
+	  //将邻居节点添加到邻居节点缓存里面
       PRINTF("RPL: Neighbor added to neighbor cache ");
       PRINT6ADDR(&from);
       PRINTF(", ");
       PRINTLLADDR((uip_lladdr_t *)packetbuf_addr(PACKETBUF_ADDR_SENDER));
       PRINTF("\n");
     } else {
+      //如果存邻居节点的缓存已经满了，就要打印提示
       PRINTF("RPL: Out of memory, dropping DIO from ");
       PRINT6ADDR(&from);
       PRINTF(", ");
@@ -330,20 +439,27 @@ dio_input(void)
       return;
     }
   } else {
+    //如果是查找结果是节点已经在邻居节点缓存里面
     PRINTF("RPL: Neighbor already in neighbor cache\n");
   }
 
+  //计算出buff的长度
   buffer_length = uip_len - uip_l3_icmp_hdr_len;
 
   /* Process the DIO base option. */
+  /* 处理DIO基础选项 */
   i = 0;
+  //buffer就是uip弄上来的消息
   buffer = UIP_ICMP_PAYLOAD;
 
+  //根据rfc6550定义的dio的格式，将报文的信息提取出来
+  //赋给dio的成员变量。
   dio.instance_id = buffer[i++];
   dio.version = buffer[i++];
   dio.rank = get16(buffer, i);
+  //因为这里是有保留位置的，所以i+=2
   i += 2;
-
+  //打印出接收到的DIO消息的id,version,rank
   PRINTF("RPL: Incoming DIO (id, ver, rank) = (%u,%u,%u)\n",
          (unsigned)dio.instance_id,
          (unsigned)dio.version,
