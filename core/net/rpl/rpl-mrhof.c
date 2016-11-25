@@ -32,6 +32,9 @@
 
 /**
  * \file
+ *         这个文件应该就是比较重要的关于OF的，如果以后想要修改OF的话，
+ *         这个文件是必须要会的
+ *
  *         The Minimum Rank with Hysteresis Objective Function (MRHOF)
  *
  *         This implementation uses the estimated number of
@@ -49,9 +52,20 @@
 #include "net/rpl/rpl-private.h"
 #include "net/nbr-table.h"
 
-#define DEBUG DEBUG_NONE
+// 同样，打开debug
+#define DEBUG DEBUG_FULL
 #include "net/ip/uip-debug.h"
 
+/*
+		有这么几种方法
+		重置dag
+		邻居链路的callback
+		选择最佳的父节点
+		选择最佳的dag
+		计算rank值
+		update metric container
+		
+*/
 static void reset(rpl_dag_t *);
 static void neighbor_link_callback(rpl_parent_t *, int, int);
 static rpl_parent_t *best_parent(rpl_parent_t *, rpl_parent_t *);
@@ -59,6 +73,7 @@ static rpl_dag_t *best_dag(rpl_dag_t *, rpl_dag_t *);
 static rpl_rank_t calculate_rank(rpl_parent_t *, rpl_rank_t);
 static void update_metric_container(rpl_instance_t *);
 
+//这个意思是不是先都调用一遍
 rpl_of_t rpl_mrhof = {
   reset,
   neighbor_link_callback,
@@ -70,18 +85,22 @@ rpl_of_t rpl_mrhof = {
 };
 
 /* Constants for the ETX moving average */
+/* 关于ETX的初始化 */
 #define ETX_SCALE   100
 #define ETX_ALPHA   90
 
 /* Reject parents that have a higher link metric than the following. */
+/* 如果有的父节点的link metric 比下述的值还高，那么就抛弃这个父节点 */
 #define MAX_LINK_METRIC			10
 
 /* Reject parents that have a higher path cost than the following. */
+/* 抛弃比下述path cost还高的父节点 */
 #define MAX_PATH_COST			100
 
 /*
  * The rank must differ more than 1/PARENT_SWITCH_THRESHOLD_DIV in order
  * to switch preferred parent.
+ * 选择一个新的父节点也不是乱选的，一定要高过一个门槛，这里定义的是2
  */
 #define PARENT_SWITCH_THRESHOLD_DIV	2
 
@@ -98,12 +117,15 @@ calculate_path_metric(rpl_parent_t *p)
   if(nbr == NULL) {
     return MAX_PATH_COST * RPL_DAG_MC_ETX_DIVISOR;
   }
+// 如果metric container 是 none，那么rank 值就是 parent的rank+link_metric
 #if RPL_DAG_MC == RPL_DAG_MC_NONE
   {
     return p->rank + (uint16_t)nbr->link_metric;
   }
+// 如果container是 ETX 就是parent的etx+link_metric
 #elif RPL_DAG_MC == RPL_DAG_MC_ETX
   return p->mc.obj.etx + (uint16_t)nbr->link_metric;
+// 能量也是依次类推
 #elif RPL_DAG_MC == RPL_DAG_MC_ENERGY
   return p->mc.obj.energy.energy_est + (uint16_t)nbr->link_metric;
 #else
@@ -111,12 +133,15 @@ calculate_path_metric(rpl_parent_t *p)
 #endif /* RPL_DAG_MC */
 }
 
+// 这个是重置
 static void
 reset(rpl_dag_t *dag)
 {
   PRINTF("RPL: Reset MRHOF\n");
 }
 
+// call back neighbor
+// 这个部分的内容，我一直觉得都是比较难得
 static void
 neighbor_link_callback(rpl_parent_t *p, int status, int numtx)
 {
@@ -159,6 +184,7 @@ neighbor_link_callback(rpl_parent_t *p, int status, int numtx)
   }
 }
 
+/* 计算rpl rank值 */
 static rpl_rank_t
 calculate_rank(rpl_parent_t *p, rpl_rank_t base_rank)
 {
@@ -170,8 +196,10 @@ calculate_rank(rpl_parent_t *p, rpl_rank_t base_rank)
     if(base_rank == 0) {
       return INFINITE_RANK;
     }
+	// 这个情况，应该是特殊的没有父节点的情况，increase 
     rank_increase = RPL_INIT_LINK_METRIC * RPL_DAG_MC_ETX_DIVISOR;
   } else {
+	// 一般情况下的increase其实就是link_metric
     rank_increase = nbr->link_metric;
     if(base_rank == 0) {
       base_rank = p->rank;
@@ -190,36 +218,47 @@ calculate_rank(rpl_parent_t *p, rpl_rank_t base_rank)
   return new_rank;
 }
 
+/* 得到最佳的dag */
 static rpl_dag_t *
 best_dag(rpl_dag_t *d1, rpl_dag_t *d2)
 {
+  // 先判断grounded
   if(d1->grounded != d2->grounded) {
     return d1->grounded ? d1 : d2;
   }
-
+  
+  //再判断preference
   if(d1->preference != d2->preference) {
     return d1->preference > d2->preference ? d1 : d2;
   }
-
+  
+  // 最后判断rank
   return d1->rank < d2->rank ? d1 : d2;
 }
-
+// 选择最好的父节点
 static rpl_parent_t *
 best_parent(rpl_parent_t *p1, rpl_parent_t *p2)
 {
+  // 定义几个要用到的相关变量
   rpl_dag_t *dag;
   rpl_path_metric_t min_diff;
   rpl_path_metric_t p1_metric;
   rpl_path_metric_t p2_metric;
 
+  // 因为这里有个前提，父节点，都是在同一个dag当中
+  // 因此拿到一个dag就够了
   dag = p1->dag; /* Both parents are in the same DAG. */
 
+  //最近diff是 rpl_dag_mc_etx因子/parent门槛
   min_diff = RPL_DAG_MC_ETX_DIVISOR /
              PARENT_SWITCH_THRESHOLD_DIV;
 
+  //计算p1的path_metric
   p1_metric = calculate_path_metric(p1);
+  //计算p2的path_metric
   p2_metric = calculate_path_metric(p2);
 
+  /* 如果rank一样，就维持原有的preference */
   /* Maintain stability of the preferred parent in case of similar ranks. */
   if(p1 == dag->preferred_parent || p2 == dag->preferred_parent) {
     if(p1_metric < p2_metric + min_diff &&
@@ -231,14 +270,17 @@ best_parent(rpl_parent_t *p1, rpl_parent_t *p2)
       return dag->preferred_parent;
     }
   }
-
+  
+  //哪个的metric小，返回哪一个
   return p1_metric < p2_metric ? p1 : p2;
 }
 
+//如果没有metric container
 #if RPL_DAG_MC == RPL_DAG_MC_NONE
 static void
 update_metric_container(rpl_instance_t *instance)
 {
+  // 其实我觉得挺奇怪的，如果没有conf mc，最后赋的值还是none
   instance->mc.type = RPL_DAG_MC;
 }
 #else
@@ -250,7 +292,8 @@ update_metric_container(rpl_instance_t *instance)
 #if RPL_DAG_MC == RPL_DAG_MC_ENERGY
   uint8_t type;
 #endif
-
+  
+  //修改关于instance有关的mc选项
   instance->mc.type = RPL_DAG_MC;
   instance->mc.flags = RPL_DAG_MC_FLAG_P;
   instance->mc.aggr = RPL_DAG_MC_AGGR_ADDITIVE;
@@ -262,13 +305,15 @@ update_metric_container(rpl_instance_t *instance)
     PRINTF("RPL: Cannot update the metric container when not joined\n");
     return;
   }
-
+  
+  // 如果是root metric设置为0
   if(dag->rank == ROOT_RANK(instance)) {
     path_metric = 0;
   } else {
     path_metric = calculate_path_metric(dag->preferred_parent);
   }
 
+// 如果container是etx
 #if RPL_DAG_MC == RPL_DAG_MC_ETX
   instance->mc.length = sizeof(instance->mc.obj.etx);
   instance->mc.obj.etx = path_metric;
