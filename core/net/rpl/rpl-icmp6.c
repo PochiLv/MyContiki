@@ -620,6 +620,9 @@ dio_input(void)
       /* 32-bit reserved at i + 12 */
       PRINTF("RPL: Copying prefix information\n");
       memcpy(&dio.prefix_info.prefix, &buffer[i + 16], 16);
+      PRINTF("Prefix Information:");
+      PRINT6ADDR(&dio.prefix_info.prefix);
+      PRINTF("\n");
       break;
     default:
       PRINTF("RPL: Unsupported suboption type in DIO: %u\n",
